@@ -1,9 +1,11 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 import os
 
 app = Flask(__name__)
+app.secret_key = 'your_super_secret_key_here'  # 실제 배포 시 변경해야 합니다
 
 # 데이터베이스 설정
 DATABASE_URL = os.environ.get('DATABASE_URL')
@@ -13,6 +15,15 @@ if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL or 'sqlite:///temp.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
+
+# 관리자 계정 설정
+ADMIN_USERNAME = "admin"
+ADMIN_PASSWORD = "your_secure_password"  # 실제 사용할 비밀번호로 변경하세요
+
+# 로그인 매니저 설정
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
 
 # IP 주소를 저장할 모델
 class AllowedIP(db.Model):
@@ -26,6 +37,45 @@ class ProgramVersion(db.Model):
     version = db.Column(db.String(20), nullable=False)
     download_url = db.Column(db.String(200), nullable=False)
     release_date = db.Column(db.DateTime, default=datetime.utcnow)
+
+# 사용자 클래스
+class User(UserMixin):
+    def __init__(self, id):
+        self.id = id
+
+@login_manager.user_loader
+def load_user(user_id):
+    if user_id == ADMIN_USERNAME:
+        return User(user_id)
+    return None
+
+# 로그인 페이지
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
+            user = User(username)
+            login_user(user)
+            return redirect(url_for('admin_panel'))
+        flash('잘못된 로그인 정보입니다.')
+    return render_template('login.html')
+
+# 로그아웃
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('login'))
+
+# 관리자 패널
+@app.route('/admin')
+@login_required
+def admin_panel():
+    ips = AllowedIP.query.all()
+    versions = ProgramVersion.query.order_by(ProgramVersion.release_date.desc()).all()
+    return render_template('admin.html', ips=ips, versions=versions)
 
 # IP 체크 엔드포인트
 @app.route('/check-ip', methods=['POST'])
@@ -48,52 +98,69 @@ def check_version():
         })
     return jsonify({'version': None, 'download_url': None})
 
-# 관리자용 IP 추가 엔드포인트
-@app.route('/admin/add-ip', methods=['POST'])
-def add_ip():
-    auth_token = request.headers.get('Authorization')
-    if auth_token != 'your_secret_admin_token':  # 실제 운영에서는 더 안전한 인증 방식 사용
-        return jsonify({'error': 'Unauthorized'}), 401
+# IP 추가 (웹 인터페이스)
+@app.route('/admin/ip/add', methods=['POST'])
+@login_required
+def add_ip_web():
+    ip = request.form.get('ip')
+    if ip:
+        try:
+            new_ip = AllowedIP(ip_address=ip)
+            db.session.add(new_ip)
+            db.session.commit()
+            flash('IP가 추가되었습니다.')
+        except Exception as e:
+            flash(f'IP 추가 중 오류가 발생했습니다: {str(e)}')
+    return redirect(url_for('admin_panel'))
 
-    ip_address = request.json.get('ip')
-    if not ip_address:
-        return jsonify({'error': 'No IP provided'}), 400
-
+# IP 삭제 (웹 인터페이스)
+@app.route('/admin/ip/delete/<int:id>', methods=['POST'])
+@login_required
+def delete_ip(id):
+    ip = AllowedIP.query.get_or_404(id)
     try:
-        new_ip = AllowedIP(ip_address=ip_address)
-        db.session.add(new_ip)
+        db.session.delete(ip)
         db.session.commit()
-        return jsonify({'message': f'IP {ip_address} added successfully'})
+        flash('IP가 삭제되었습니다.')
     except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        flash(f'IP 삭제 중 오류가 발생했습니다: {str(e)}')
+    return redirect(url_for('admin_panel'))
 
-# 관리자용 버전 업데이트 엔드포인트
-@app.route('/admin/update-version', methods=['POST'])
-def update_version():
-    auth_token = request.headers.get('Authorization')
-    if auth_token != 'your_secret_admin_token':  # 실제 운영에서는 더 안전한 인증 방식 사용
-        return jsonify({'error': 'Unauthorized'}), 401
+# 버전 업데이트 추가 (웹 인터페이스)
+@app.route('/admin/version/add', methods=['POST'])
+@login_required
+def add_version_web():
+    version = request.form.get('version')
+    download_url = request.form.get('download_url')
+    if version and download_url:
+        try:
+            new_version = ProgramVersion(version=version, download_url=download_url)
+            db.session.add(new_version)
+            db.session.commit()
+            flash('새 버전이 추가되었습니다.')
+        except Exception as e:
+            flash(f'버전 추가 중 오류가 발생했습니다: {str(e)}')
+    return redirect(url_for('admin_panel'))
 
-    version = request.json.get('version')
-    download_url = request.json.get('download_url')
-    
-    if not version or not download_url:
-        return jsonify({'error': 'Version and download_url are required'}), 400
-
+# 버전 삭제 (웹 인터페이스)
+@app.route('/admin/version/delete/<int:id>', methods=['POST'])
+@login_required
+def delete_version(id):
+    version = ProgramVersion.query.get_or_404(id)
     try:
-        new_version = ProgramVersion(version=version, download_url=download_url)
-        db.session.add(new_version)
+        db.session.delete(version)
         db.session.commit()
-        return jsonify({'message': f'Version {version} added successfully'})
+        flash('버전이 삭제되었습니다.')
     except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        flash(f'버전 삭제 중 오류가 발생했습니다: {str(e)}')
+    return redirect(url_for('admin_panel'))
 
 # 메인 페이지
 @app.route('/')
 def index():
-    return 'SMP Server is running!'
+    if current_user.is_authenticated:
+        return redirect(url_for('admin_panel'))
+    return redirect(url_for('login'))
 
 if __name__ == '__main__':
     with app.app_context():

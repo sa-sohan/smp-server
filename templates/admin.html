@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SMP 관리자 패널</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .navbar {
+            margin-bottom: 2rem;
+        }
+        .card {
+            margin-bottom: 2rem;
+        }
+        .logout-btn {
+            color: white;
+            text-decoration: none;
+        }
+        .logout-btn:hover {
+            color: #f8f9fa;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-dark bg-primary">
+        <div class="container">
+            <span class="navbar-brand">SMP 관리자 패널</span>
+            <a href="{{ url_for('logout') }}" class="logout-btn">로그아웃</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-info">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- IP 관리 섹션 -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">IP 관리</h5>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('add_ip_web') }}" method="POST" class="row g-3 mb-4">
+                    <div class="col-auto">
+                        <input type="text" name="ip" class="form-control" placeholder="IP 주소" required>
+                    </div>
+                    <div class="col-auto">
+                        <button type="submit" class="btn btn-primary">IP 추가</button>
+                    </div>
+                </form>
+
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>IP 주소</th>
+                            <th>등록일</th>
+                            <th>작업</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for ip in ips %}
+                        <tr>
+                            <td>{{ ip.ip_address }}</td>
+                            <td>{{ ip.added_date.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                            <td>
+                                <form action="{{ url_for('delete_ip', id=ip.id) }}" method="POST" style="display: inline;">
+                                    <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('정말 삭제하시겠습니까?')">삭제</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 버전 관리 섹션 -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">버전 관리</h5>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('add_version_web') }}" method="POST" class="row g-3 mb-4">
+                    <div class="col-auto">
+                        <input type="text" name="version" class="form-control" placeholder="버전 (예: 1.0.0)" required>
+                    </div>
+                    <div class="col-auto">
+                        <input type="text" name="download_url" class="form-control" placeholder="다운로드 URL" required>
+                    </div>
+                    <div class="col-auto">
+                        <button type="submit" class="btn btn-primary">버전 추가</button>
+                    </div>
+                </form>
+
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>버전</th>
+                            <th>다운로드 URL</th>
+                            <th>등록일</th>
+                            <th>작업</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for version in versions %}
+                        <tr>
+                            <td>{{ version.version }}</td>
+                            <td>{{ version.download_url }}</td>
+                            <td>{{ version.release_date.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                            <td>
+                                <form action="{{ url_for('delete_version', id=version.id) }}" method="POST" style="display: inline;">
+                                    <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('정말 삭제하시겠습니까?')">삭제</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
