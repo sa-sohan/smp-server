@@ -1,11 +1,16 @@
 from flask import Flask, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
+import os
 
 app = Flask(__name__)
 
-# 데이터베이스 설정 (나중에 Heroku에서 실제 DB URL로 변경할 예정)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///temp.db'
+# 데이터베이스 설정
+DATABASE_URL = os.environ.get('DATABASE_URL')
+if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL or 'sqlite:///temp.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
@@ -42,6 +47,53 @@ def check_version():
             'download_url': latest_version.download_url
         })
     return jsonify({'version': None, 'download_url': None})
+
+# 관리자용 IP 추가 엔드포인트
+@app.route('/admin/add-ip', methods=['POST'])
+def add_ip():
+    auth_token = request.headers.get('Authorization')
+    if auth_token != 'your_secret_admin_token':  # 실제 운영에서는 더 안전한 인증 방식 사용
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    ip_address = request.json.get('ip')
+    if not ip_address:
+        return jsonify({'error': 'No IP provided'}), 400
+
+    try:
+        new_ip = AllowedIP(ip_address=ip_address)
+        db.session.add(new_ip)
+        db.session.commit()
+        return jsonify({'message': f'IP {ip_address} added successfully'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+# 관리자용 버전 업데이트 엔드포인트
+@app.route('/admin/update-version', methods=['POST'])
+def update_version():
+    auth_token = request.headers.get('Authorization')
+    if auth_token != 'your_secret_admin_token':  # 실제 운영에서는 더 안전한 인증 방식 사용
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    version = request.json.get('version')
+    download_url = request.json.get('download_url')
+    
+    if not version or not download_url:
+        return jsonify({'error': 'Version and download_url are required'}), 400
+
+    try:
+        new_version = ProgramVersion(version=version, download_url=download_url)
+        db.session.add(new_version)
+        db.session.commit()
+        return jsonify({'message': f'Version {version} added successfully'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+# 메인 페이지
+@app.route('/')
+def index():
+    return 'SMP Server is running!'
 
 if __name__ == '__main__':
     with app.app_context():
