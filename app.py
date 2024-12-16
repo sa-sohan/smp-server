@@ -5,7 +5,7 @@ from flask_login import LoginManager, UserMixin, login_user, login_required, log
 import os
 
 app = Flask(__name__)
-app.secret_key = 'your_super_secret_key_here'  # 실제 배포 시 변경해야 합니다
+app.secret_key = 'Kx9#mP2$vN5@jL8q'  # 실제 배포 시 변경해야 합니다
 
 # 데이터베이스 설정
 DATABASE_URL = os.environ.get('DATABASE_URL')
@@ -18,7 +18,7 @@ db = SQLAlchemy(app)
 
 # 관리자 계정 설정
 ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD = "your_secure_password"  # 실제 사용할 비밀번호로 변경하세요
+ADMIN_PASSWORD = "Kx9#mP2$vN5@jL8q"  # 실제 사용할 비밀번호로 변경하세요
 
 # 로그인 매니저 설정
 login_manager = LoginManager()
